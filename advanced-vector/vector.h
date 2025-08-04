@@ -21,15 +21,10 @@ public:
         other.buffer_ = nullptr;
         other.capacity_ = 0;
     }
+
     RawMemory& operator=(RawMemory&& rhs) noexcept {
         if (this != &rhs) {
-            Deallocate(buffer_);
-
-            buffer_ = rhs.buffer_;
-            capacity_ = rhs.capacity_;
-
-            rhs.buffer_ = nullptr;
-            rhs.capacity_ = 0;
+            Swap(rhs);
         }
         return *this;
     }
@@ -123,7 +118,6 @@ public:
             throw  std::runtime_error(" ");
         }
     }
-
     Vector(Vector&& other) noexcept
         : data_(std::move(other.data_))
         , size_(other.size_)
@@ -157,6 +151,7 @@ public:
 
     template <typename... Args>
     iterator Emplace(const_iterator pos, Args&&... args) {
+        assert(pos >= begin() && pos < end());
         size_t offset = pos - begin();
 
         if (size_ != Capacity()) {
@@ -182,13 +177,15 @@ public:
         }else {
             RawMemory<T> new_data(size_ == 0 ? 1 : size_ * 2);
             T* new_pos = new_data.GetAddress() + offset;
-
+            size_t constructed = 0;
             try {
+                constructed = offset;
                 std::uninitialized_move_n(data_.GetAddress(), offset, new_data.GetAddress());
                 new (new_pos) T(std::forward<Args>(args)...);
                 std::uninitialized_move_n(data_.GetAddress() + offset, size_ - offset, new_pos + 1);
+                constructed = (size_ - offset);
             }catch (...) {
-                std::destroy_n(new_data.GetAddress(), offset);
+                std::destroy_n(new_data.GetAddress(), constructed);
                 throw;
             }
 
@@ -245,6 +242,7 @@ public:
     }
 
     iterator Erase(const_iterator pos) {
+        assert(pos >= begin() && pos < end());
         T* it = const_cast<T*>(pos);
         std::move(it + 1, end(), it);
         PopBack();
@@ -318,6 +316,7 @@ public:
         }
         return *this;
     }
+
 
     iterator begin() noexcept {
         return data_.GetAddress();
